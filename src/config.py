@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 
+# ⚠️  Never hardcode credentials here. Use a .env file (see .env.example).
+
 if TYPE_CHECKING:
     from langchain_community.vectorstores import FAISS
 
@@ -33,7 +35,7 @@ _EXTRACTION_DEPLOYMENT = os.getenv("AZURE_EXTRACTION_DEPLOYMENT", "gpt-4o")
 _EMBEDDING_DEPLOYMENT = os.getenv("AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
 
 # ── Extraction tuning ──────────────────────────────────────────────────────────
-CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.50"))
+CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.99"))
 MAX_EXTRACTION_ATTEMPTS: int = int(os.getenv("MAX_EXTRACTION_ATTEMPTS", "2"))
 CHUNK_THRESHOLD_PAGES: int = int(os.getenv("CHUNK_THRESHOLD_PAGES", "15"))
 

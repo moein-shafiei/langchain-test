@@ -1,0 +1,29 @@
+# Credentials & secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Extraction outputs & checkpoints
+output/
+checkpoints.db
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
