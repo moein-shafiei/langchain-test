@@ -1,0 +1,122 @@
+FINANCIAL DOCUMENT EXTRACTION SCHEMA
+======================================
+
+Document Type: financial
+Purpose: Extract structured financial data from income statements, balance sheets,
+annual reports, invoices, purchase orders, and financial summaries.
+
+SCHEMA FIELDS
+-------------
+- company_name (string | null)
+  Legal name of the company or organisation.
+  Often appears in the header, cover page, or letterhead.
+
+- reporting_period (string | null)
+  Time span covered by this document. Preserve the exact phrasing.
+  Examples: "Year ended December 31, 2023", "Q3 2024", "Six months ended June 30, 2024".
+
+- currency (string | null)
+  Currency code or symbol found in the document.
+  Prefer ISO 4217 codes (USD, CAD, EUR, GBP) but preserve the symbol if no code given.
+
+- revenue (float | null)
+  Total revenue, net sales, or gross income — numeric value only (no currency symbol).
+  Look for: "Total Revenue", "Net Sales", "Revenues", "Gross Income".
+
+- total_expenses (float | null)
+  Total operating expenses or cost of goods sold — numeric value only.
+  Look for: "Total Expenses", "Operating Expenses", "Total Costs".
+
+- net_income (float | null)
+  Net profit or net loss — numeric value only. Use a negative number for a loss.
+  Look for: "Net Income", "Net Earnings", "Net Loss", "Profit After Tax".
+
+- total_assets (float | null)
+  Total assets from the balance sheet — numeric value only.
+  Look for: "Total Assets" in a balance sheet section.
+
+- key_line_items (list of LineItem objects)
+  Up to 10 notable line items. Each item has:
+    - name (string): descriptive label, e.g. "Cost of Goods Sold".
+    - amount (float | null): numeric value.
+    - period (string | null): sub-period if given, e.g. "Q1 2024".
+
+- extraction_confidence (float 0.0–1.0)
+  - 0.9–1.0: company_name, reporting_period, and at least two of revenue/expenses/net_income found.
+  - 0.5–0.8: some key figures missing.
+  - < 0.5: no numeric financials found or document is a cover/index page only.
+
+- extraction_notes (string)
+  Caveats such as "Figures in thousands" or "Unaudited interim results".
+
+
+FEW-SHOT EXAMPLE 1
+-------------------
+Input text excerpt:
+  "Acme Corporation
+   Consolidated Income Statement
+   Year Ended December 31, 2023  (USD thousands)
+
+   Revenue                         $ 48,500
+   Cost of Goods Sold               (29,100)
+   Gross Profit                      19,400
+   Operating Expenses                (8,200)
+   Operating Income                  11,200
+   Interest Expense                   (650)
+   Net Income                       $ 10,550"
+
+Expected output:
+{
+  "document_type": "financial",
+  "company_name": "Acme Corporation",
+  "reporting_period": "Year Ended December 31, 2023",
+  "currency": "USD",
+  "revenue": 48500.0,
+  "total_expenses": 37300.0,
+  "net_income": 10550.0,
+  "total_assets": null,
+  "key_line_items": [
+    {"name": "Cost of Goods Sold",  "amount": -29100.0, "period": null},
+    {"name": "Gross Profit",        "amount":  19400.0, "period": null},
+    {"name": "Operating Expenses",  "amount":  -8200.0, "period": null},
+    {"name": "Operating Income",    "amount":  11200.0, "period": null},
+    {"name": "Interest Expense",    "amount":   -650.0, "period": null}
+  ],
+  "extraction_confidence": 0.93,
+  "extraction_notes": "Figures in USD thousands as stated in document header."
+}
+
+
+FEW-SHOT EXAMPLE 2 (invoice)
+------------------------------
+Input text excerpt:
+  "INVOICE #INV-2024-0892
+   Vendor: Globex Supplies Ltd.
+   Bill To: Initech Inc.
+   Invoice Date: 2024-11-15
+
+   Line Items:
+     Office Chairs (x10)   CAD 3,200.00
+     Standing Desks (x5)   CAD 4,750.00
+     Delivery Fee          CAD   120.00
+   Total Due:              CAD 8,070.00"
+
+Expected output:
+{
+  "document_type": "financial",
+  "company_name": "Globex Supplies Ltd.",
+  "reporting_period": "2024-11-15",
+  "currency": "CAD",
+  "revenue": null,
+  "total_expenses": null,
+  "net_income": null,
+  "total_assets": null,
+  "key_line_items": [
+    {"name": "Office Chairs (x10)", "amount":  3200.0, "period": null},
+    {"name": "Standing Desks (x5)", "amount":  4750.0, "period": null},
+    {"name": "Delivery Fee",        "amount":   120.0, "period": null},
+    {"name": "Total Due",           "amount":  8070.0, "period": null}
+  ],
+  "extraction_confidence": 0.80,
+  "extraction_notes": "Document is an invoice; revenue/expenses/net_income fields not applicable."
+}

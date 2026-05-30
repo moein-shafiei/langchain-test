@@ -1,0 +1,114 @@
+MEDICAL DOCUMENT EXTRACTION SCHEMA
+====================================
+
+Document Type: medical
+Purpose: Extract structured patient and clinical information from medical forms,
+clinical notes, discharge summaries, lab reports, and prescriptions.
+
+SCHEMA FIELDS
+-------------
+- patient_name (string | null)
+  The full name of the patient.
+  Look for labels: "Patient:", "Name:", "Patient Name:", "Pt:", "Patient ID".
+
+- date_of_birth (string | null)
+  Patient's date of birth. Preserve the exact format found in the document.
+  Look for: "DOB:", "Date of Birth:", "Birth Date:", "D.O.B.".
+
+- diagnosis_codes (list of strings)
+  ICD-10 or ICD-9 alphanumeric codes. Example: ["E11.9", "I10", "Z87.891"].
+  Look for: "Diagnosis Code:", "ICD:", "DX Code:", "Principal Diagnosis:".
+
+- diagnosis_descriptions (list of strings)
+  Plain-text descriptions that correspond to the codes above.
+  Example: ["Type 2 diabetes mellitus without complications", "Essential hypertension"].
+
+- medications (list of Medication objects)
+  Each medication must have:
+    - name (string): Drug name, generic or brand.
+    - dosage (string | null): Dose amount and unit, e.g. "500 mg", "10 mcg".
+    - frequency (string | null): e.g. "twice daily", "QID", "every 8 hours", "PRN".
+
+- provider_name (string | null)
+  The treating physician or clinician.
+  Look for: "Physician:", "Provider:", "Ordering Provider:", "Attending:", "Signed by:".
+
+- visit_date (string | null)
+  Date of visit, encounter, or service. Preserve original format.
+  Look for: "Date of Service:", "Visit Date:", "Encounter Date:", "Admission Date:".
+
+- facility (string | null)
+  Name of the hospital, clinic, or medical centre.
+  Often appears in the document header/letterhead or footer.
+
+- extraction_confidence (float 0.0–1.0)
+  How complete and reliable this extraction is:
+  - 0.9–1.0: all key fields (patient_name, visit_date, at least one diagnosis) found.
+  - 0.5–0.8: some key fields missing but core structure is present.
+  - < 0.5: major fields missing or document is ambiguous.
+
+- extraction_notes (string)
+  Note any ambiguities, e.g. "No diagnosis codes found; used description only."
+
+
+FEW-SHOT EXAMPLE 1
+-------------------
+Input text excerpt:
+  "St. Mary's Medical Center
+   Patient: Jane Doe          DOB: 07/22/1978
+   Visit Date: 2024-03-05
+   Attending Physician: Dr. Robert Chen, MD
+
+   Diagnoses:
+     E11.9  Type 2 Diabetes Mellitus without complications
+     I10    Essential Hypertension
+
+   Medications:
+   - Metformin HCl  1000 mg  twice daily
+   - Amlodipine     5 mg     once daily"
+
+Expected output:
+{
+  "document_type": "medical",
+  "patient_name": "Jane Doe",
+  "date_of_birth": "07/22/1978",
+  "diagnosis_codes": ["E11.9", "I10"],
+  "diagnosis_descriptions": [
+    "Type 2 Diabetes Mellitus without complications",
+    "Essential Hypertension"
+  ],
+  "medications": [
+    {"name": "Metformin HCl", "dosage": "1000 mg", "frequency": "twice daily"},
+    {"name": "Amlodipine",    "dosage": "5 mg",    "frequency": "once daily"}
+  ],
+  "provider_name": "Dr. Robert Chen, MD",
+  "visit_date": "2024-03-05",
+  "facility": "St. Mary's Medical Center",
+  "extraction_confidence": 0.97,
+  "extraction_notes": ""
+}
+
+
+FEW-SHOT EXAMPLE 2 (partial document)
+--------------------------------------
+Input text excerpt:
+  "DISCHARGE SUMMARY
+   Patient Name: Michael Torres
+   Discharge Date: January 14, 2025
+   Primary Diagnosis: Acute appendicitis (K35.89)
+   Procedure: Laparoscopic appendectomy"
+
+Expected output:
+{
+  "document_type": "medical",
+  "patient_name": "Michael Torres",
+  "date_of_birth": null,
+  "diagnosis_codes": ["K35.89"],
+  "diagnosis_descriptions": ["Acute appendicitis"],
+  "medications": [],
+  "provider_name": null,
+  "visit_date": "January 14, 2025",
+  "facility": null,
+  "extraction_confidence": 0.70,
+  "extraction_notes": "Date of birth and provider name not present in the excerpt."
+}

@@ -1,0 +1,113 @@
+GENERIC DOCUMENT EXTRACTION SCHEMA
+====================================
+
+Document Type: generic
+Purpose: Extract structured information from any document that does not fit
+the medical or financial categories — e.g. legal agreements, policy documents,
+research reports, memos, correspondence, product manuals, RFPs.
+
+SCHEMA FIELDS
+-------------
+- title (string | null)
+  The primary heading or title of the document.
+  Look for the largest/first heading, a "Subject:" line, or a cover-page title.
+
+- summary (string)
+  A 2–4 sentence plain-English summary of the document's purpose, scope, and
+  key conclusions or actions. Do not reproduce raw text verbatim.
+
+- key_entities (list of NamedEntity objects)
+  Important named entities found in the document. Each entity has:
+    - text (string): entity text as it appears in the document.
+    - entity_type (string | null): one of PERSON, ORG, LOCATION, DATE, PRODUCT,
+      LAW, EVENT, or MISC.
+
+- dates_mentioned (list of strings)
+  All significant dates in the document, in the format found.
+  Include effective dates, expiry dates, submission deadlines, signatures dates.
+
+- extracted_fields (dict[string, any])
+  A flexible key-value map for domain-specific fields that stand out, such as:
+    - contract_number, reference_id, case_number
+    - total_value, penalty_clause, governing_law
+    - document_version, confidentiality_level
+  Keys must be lowercase_snake_case and descriptive.
+
+- extraction_confidence (float 0.0–1.0)
+  - 0.9–1.0: title, summary, and at least 3 entities extracted.
+  - 0.5–0.8: title and summary extracted but entity list is sparse.
+  - < 0.5: document is mostly unreadable, scanned, or entirely images.
+
+- extraction_notes (string)
+  Any caveats or unusual characteristics of the document.
+
+
+FEW-SHOT EXAMPLE 1 (contract)
+-------------------------------
+Input text excerpt:
+  "SERVICE AGREEMENT
+   Reference: SA-2025-1138
+
+   This Service Agreement ('Agreement') is entered into as of January 1, 2025,
+   by and between Pinnacle Solutions Inc. ('Service Provider'), a corporation
+   incorporated under the laws of Ontario, Canada, and Redwood Analytics Corp.
+   ('Client'), incorporated under the laws of Delaware, USA.
+
+   Term: January 1, 2025 to December 31, 2025.
+   Total Contract Value: USD 120,000
+   Governing Law: Province of Ontario, Canada."
+
+Expected output:
+{
+  "document_type": "generic",
+  "title": "SERVICE AGREEMENT",
+  "summary": "A one-year service agreement between Pinnacle Solutions Inc. (Service Provider) and Redwood Analytics Corp. (Client) for USD 120,000. The agreement runs from January 1 to December 31, 2025, and is governed by the laws of Ontario, Canada.",
+  "key_entities": [
+    {"text": "Pinnacle Solutions Inc.", "entity_type": "ORG"},
+    {"text": "Redwood Analytics Corp.", "entity_type": "ORG"},
+    {"text": "Ontario, Canada",         "entity_type": "LOCATION"},
+    {"text": "Delaware, USA",           "entity_type": "LOCATION"}
+  ],
+  "dates_mentioned": ["January 1, 2025", "December 31, 2025"],
+  "extracted_fields": {
+    "reference_id": "SA-2025-1138",
+    "total_contract_value": "USD 120,000",
+    "governing_law": "Province of Ontario, Canada",
+    "contract_term": "January 1, 2025 to December 31, 2025"
+  },
+  "extraction_confidence": 0.92,
+  "extraction_notes": ""
+}
+
+
+FEW-SHOT EXAMPLE 2 (research abstract)
+----------------------------------------
+Input text excerpt:
+  "LLM-Based Multi-Agent Systems for Enterprise Automation
+   Authors: Sarah Kim, David Nguyen — submitted to ICML 2025
+
+   Abstract: This paper presents a framework for deploying stateful multi-agent
+   systems using LangGraph. We benchmark three routing strategies across 12
+   enterprise datasets and report a 34% reduction in average task latency
+   compared to single-agent baselines."
+
+Expected output:
+{
+  "document_type": "generic",
+  "title": "LLM-Based Multi-Agent Systems for Enterprise Automation",
+  "summary": "An academic paper proposing a LangGraph-based framework for stateful multi-agent enterprise automation. The study evaluates three routing strategies on 12 datasets and demonstrates a 34% reduction in task latency versus single-agent baselines.",
+  "key_entities": [
+    {"text": "Sarah Kim",   "entity_type": "PERSON"},
+    {"text": "David Nguyen","entity_type": "PERSON"},
+    {"text": "ICML 2025",   "entity_type": "EVENT"}
+  ],
+  "dates_mentioned": ["ICML 2025"],
+  "extracted_fields": {
+    "authors": "Sarah Kim, David Nguyen",
+    "venue": "ICML 2025",
+    "key_result": "34% reduction in average task latency",
+    "datasets_evaluated": "12 enterprise datasets"
+  },
+  "extraction_confidence": 0.88,
+  "extraction_notes": "Only the abstract was provided; full paper content not available."
+}
