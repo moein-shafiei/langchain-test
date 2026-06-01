@@ -36,12 +36,17 @@ from graph.graph import build_graph
 
 # ── Core extraction ────────────────────────────────────────────────────────────
 
-def run_extraction(pdf_path: str, thread_id: str | None = None) -> str | None:
+def run_extraction(
+    pdf_path: str,
+    thread_id: str | None = None,
+) -> tuple[str | None, dict | None]:
     """
     Run the full extraction pipeline for a single PDF.
 
-    Returns the path to the output JSON file on success, or None if the
-    graph was interrupted for human review.
+    Returns:
+        (output_path, None)           – success: path to the output JSON file.
+        (None, interrupt_payload)     – HITL pause: graph interrupted, operator
+                                        must review and call resume_with_correction().
     """
     graph = build_graph()
     thread_id = thread_id or str(uuid.uuid4())
@@ -63,20 +68,18 @@ def run_extraction(pdf_path: str, thread_id: str | None = None) -> str | None:
     # current state dict with an extra "__interrupt__" key.
     interrupts = result.get("__interrupt__")
     if interrupts:
+        interrupt_obj = interrupts[0]
+        payload = getattr(interrupt_obj, "value", interrupt_obj)
+        # Attach thread_id so callers don't need to track it separately
+        payload = {**payload, "thread_id": thread_id}
+
         print("\n[HUMAN REVIEW REQUIRED]")
         print("─" * 60)
-        print("The graph was paused because extraction requires human review.")
-        print(f"Thread ID for resumption: {thread_id}\n")
-
-        for i, interrupt_obj in enumerate(interrupts, start=1):
-            payload = getattr(interrupt_obj, "value", interrupt_obj)
-            print(f"Interrupt {i} payload:")
-            print(json.dumps(payload, indent=2, default=str))
-
+        print(f"Thread ID for resumption: {thread_id}")
+        print(json.dumps(payload, indent=2, default=str))
         print("\nTo resume:")
-        print("  1. Save your corrected extraction to a JSON file.")
-        print(f"  2. Run: python main.py --resume <path/to/corrected.json> --thread-id {thread_id}")
-        return None
+        print(f"  python main.py --resume <corrected.json> --thread-id {thread_id}")
+        return None, payload
 
     output_path = result.get("output_path")
     if output_path:
@@ -91,18 +94,25 @@ def run_extraction(pdf_path: str, thread_id: str | None = None) -> str | None:
     else:
         print("[WARNING] Graph finished but no output_path in state.", file=sys.stderr)
 
-    return output_path
+    return output_path, None
 
 
 # ── HITL resumption ────────────────────────────────────────────────────────────
 
-def resume_with_correction(thread_id: str, corrected_json_path: str) -> str | None:
+def resume_with_correction(
+    thread_id: str,
+    corrected_json_path: str,
+) -> tuple[str | None, dict | None]:
     """
     Resume a HITL-paused workflow.
 
     Reads the corrected extraction result from ``corrected_json_path`` and
     passes it as the ``Command(resume=...)`` value to LangGraph so the graph
     can continue from the human_review_queue node.
+
+    Returns:
+        (output_path, None)        – success.
+        (None, interrupt_payload)  – graph interrupted again (rare).
     """
     from langgraph.types import Command
 
@@ -117,6 +127,12 @@ def resume_with_correction(thread_id: str, corrected_json_path: str) -> str | No
 
     result = graph.invoke(Command(resume=corrected_result), config)
 
+    interrupts = result.get("__interrupt__")
+    if interrupts:
+        interrupt_obj = interrupts[0]
+        payload = {**getattr(interrupt_obj, "value", interrupt_obj), "thread_id": thread_id}
+        return None, payload
+
     output_path = result.get("output_path")
     if output_path:
         print(f"\n[SUCCESS] Resumed extraction complete")
@@ -124,7 +140,7 @@ def resume_with_correction(thread_id: str, corrected_json_path: str) -> str | No
     else:
         print("[WARNING] Graph finished after resume but no output_path in state.", file=sys.stderr)
 
-    return output_path
+    return output_path, None
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
@@ -156,7 +172,9 @@ def main() -> None:
             parser.error("--thread-id is required when using --resume.")
         resume_with_correction(args.thread_id, args.resume)
     elif args.pdf:
-        run_extraction(args.pdf, args.thread_id)
+        _, interrupt_payload = run_extraction(args.pdf, args.thread_id)
+        if interrupt_payload:
+            sys.exit(2)  # non-zero exit so scripts can detect HITL pause
     else:
         parser.print_help()
         sys.exit(1)
