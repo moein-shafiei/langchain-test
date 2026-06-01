@@ -220,16 +220,19 @@ def extract_custom_node(state: ExtractionState) -> dict:
     custom_fields: dict[str, Any] = state.get("custom_fields") or {}
     extraction_model = config.get_extraction_model()
 
-    # Build a flat Pydantic model with Optional[Any] for every user field.
-    # Standard book-keeping fields are always appended.
+    # Build a flat Pydantic model with Optional[str] for every user field.
+    # Using str (not Any) keeps the JSON schema concrete and compatible with
+    # both strict structured-output and function_calling modes.
     field_defs: dict[str, Any] = {
-        k: (Any | None, None) for k in custom_fields
+        k: (str | None, None) for k in custom_fields
     }
     field_defs["extraction_confidence"] = (float, 0.0)
     field_defs["extraction_notes"] = (str, "")
     DynamicModel = create_model("CustomExtractionResult", **field_defs)
 
-    structured = extraction_model.with_structured_output(DynamicModel)
+    structured = extraction_model.with_structured_output(
+        DynamicModel, method="function_calling"
+    )
 
     # Build the prompt
     fields_block = "\n".join(

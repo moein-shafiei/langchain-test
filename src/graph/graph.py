@@ -83,7 +83,7 @@ _EXTRACTION_RETRY_POLICY = RetryPolicy(
 
 
 def _extraction_error_handler(
-    state: ExtractionState, error: Exception
+    state: ExtractionState, error: Exception | None = None
 ) -> Command:
     """
     Circuit-breaker callback invoked after all retry attempts are exhausted.
