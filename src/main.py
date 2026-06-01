@@ -39,9 +39,18 @@ from graph.graph import build_graph
 def run_extraction(
     pdf_path: str,
     thread_id: str | None = None,
+    custom_fields: dict | None = None,
 ) -> tuple[str | None, dict | None]:
     """
     Run the full extraction pipeline for a single PDF.
+
+    Args:
+        pdf_path:      Path to the PDF file.
+        thread_id:     Optional thread ID for state rehydration / HITL resumption.
+        custom_fields: Optional dict mapping field names to natural-language
+                       descriptions.  When provided, classification and RAG are
+                       skipped and only these fields are extracted.
+                       Example: {"company_name": "Legal name", "revenue": "Total revenue in USD"}
 
     Returns:
         (output_path, None)           – success: path to the output JSON file.
@@ -56,6 +65,8 @@ def run_extraction(
         "pdf_path": pdf_path,
         "thread_id": thread_id,
     }
+    if custom_fields:
+        initial_state["custom_fields"] = custom_fields
 
     print(f"[INFO] Starting extraction")
     print(f"       PDF    : {pdf_path}")

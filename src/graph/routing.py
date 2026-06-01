@@ -11,6 +11,18 @@ from config import CONFIDENCE_THRESHOLD, MAX_EXTRACTION_ATTEMPTS
 from .state import ExtractionState
 
 
+def route_after_parse(state: ExtractionState) -> str:
+    """
+    Route immediately after parse_document.
+
+    If the caller supplied custom_fields, skip classification and RAG and
+    go straight to the custom extractor.  Otherwise follow the standard path.
+    """
+    if state.get("custom_fields"):
+        return "extract_custom"
+    return "classify_document"
+
+
 def route_to_extractor(state: ExtractionState) -> str:
     """
     Route from retrieve_schema_context to the correct extraction node
@@ -48,6 +60,8 @@ def route_after_validation(state: ExtractionState) -> str:
 
     # Self-correction: still have budget, route back to the same extractor
     if attempts < MAX_EXTRACTION_ATTEMPTS:
+        if state.get("custom_fields"):
+            return "extract_custom"
         return route_to_extractor(state)
 
     # Exhausted retries or confidence below threshold → escalate

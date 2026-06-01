@@ -150,6 +150,21 @@ def render_result(extraction: dict) -> None:
             st.subheader("Medications")
             st.dataframe(meds, hide_index=True)
 
+    # ── Custom fields ─────────────────────────────────────────────────────────
+    elif doc_type == "custom":
+        # Show every key that isn't a bookkeeping field as a simple table
+        _SKIP = {"document_type", "extraction_confidence", "extraction_notes",
+                 "human_review_required"}
+        rows = [
+            {"Field": k, "Value": ("—" if v is None else str(v))}
+            for k, v in extraction.items()
+            if k not in _SKIP
+        ]
+        if rows:
+            st.dataframe(rows, hide_index=True)
+        else:
+            st.info("No fields were extracted.")
+
     # ── Generic ───────────────────────────────────────────────────────────────
     else:
         if extraction.get("title"):
@@ -199,9 +214,38 @@ with tab_extract:
         help="Machine-generated (text-layer) PDFs only. Scanned PDFs are not supported.",
     )
 
+    st.markdown("**Custom fields to extract** *(optional)*")
+    st.caption(
+        "Provide a JSON object where each key is the field name and each value is "
+        "a plain-English description. When filled in, the pipeline extracts **only** "
+        "these fields and skips automatic document classification."
+    )
+    custom_fields_input = st.text_area(
+        "Custom fields JSON",
+        value="",
+        height=140,
+        placeholder='{\n  "company_name": "Legal name of the company",\n  "revenue": "Total revenue in USD",\n  "fiscal_year": "Fiscal year covered by the report"\n}',
+        label_visibility="collapsed",
+        key="custom_fields_textarea",
+    )
+
     run_btn = st.button("Extract", type="primary", disabled=uploaded is None)
 
     if run_btn and uploaded is not None:
+        # Parse custom fields if provided
+        custom_fields: dict | None = None
+        if custom_fields_input.strip():
+            try:
+                custom_fields = json.loads(custom_fields_input)
+                if not isinstance(custom_fields, dict):
+                    st.error("Custom fields must be a JSON object (key → description).")
+                    st.stop()
+                if not custom_fields:
+                    custom_fields = None
+            except json.JSONDecodeError as exc:
+                st.error(f"Invalid JSON in custom fields: {exc}")
+                st.stop()
+
         # Save upload to a named temp file (pdfplumber needs a real path)
         tmp_pdf = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         try:
@@ -216,7 +260,9 @@ with tab_extract:
             st.session_state.interrupt_payload = None
 
             with st.spinner("Running extraction pipeline…"):
-                output_path, interrupt_payload = run_extraction(tmp_pdf.name)
+                output_path, interrupt_payload = run_extraction(
+                    tmp_pdf.name, custom_fields=custom_fields
+                )
 
         finally:
             try:

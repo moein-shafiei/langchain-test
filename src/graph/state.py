@@ -40,6 +40,13 @@ class ExtractionState(TypedDict):
     validation_errors: list[str]      # Non-empty → self-correction or HITL
     extraction_confidence: float      # Mirrored from extraction_result
 
+    # ── Custom-field extraction (optional, provided by caller) ────────────────
+    # When set, classification and RAG are skipped.  The pipeline extracts
+    # only the fields listed here; keys are field names, values are natural-
+    # language descriptions (used in the extraction prompt).
+    # Example: {"company_name": "Legal name of the company", "revenue": "Total revenue in USD"}
+    custom_fields: Optional[dict[str, Any]]
+
     # ── Human-in-the-loop ──────────────────────────────────────────────────────
     human_review_required: bool
     human_review_payload: Optional[dict[str, Any]]

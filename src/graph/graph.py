@@ -56,6 +56,7 @@ from langgraph.types import Command, RetryPolicy
 import config
 from .nodes import (
     classify_document_node,
+    extract_custom_node,
     extract_financial_node,
     extract_generic_node,
     extract_medical_node,
@@ -65,7 +66,7 @@ from .nodes import (
     validate_extraction_node,
     write_output_node,
 )
-from .routing import route_after_validation, route_to_extractor
+from .routing import route_after_parse, route_after_validation, route_to_extractor
 from .state import ExtractionState
 
 # ── Resiliency: per-node retry policy ─────────────────────────────────────────
@@ -134,6 +135,12 @@ def build_graph(db_path: str | None = None) -> StateGraph:
 
     # Extraction nodes carry retry + circuit-breaker resiliency
     builder.add_node(
+        "extract_custom",
+        extract_custom_node,
+        retry_policy=_EXTRACTION_RETRY_POLICY,
+        error_handler=_extraction_error_handler,
+    )
+    builder.add_node(
         "extract_medical",
         extract_medical_node,
         retry_policy=_EXTRACTION_RETRY_POLICY,
@@ -158,10 +165,10 @@ def build_graph(db_path: str | None = None) -> StateGraph:
 
     # ── Static edges ───────────────────────────────────────────────────────────
     builder.add_edge(START, "parse_document")
-    builder.add_edge("parse_document", "classify_document")
     builder.add_edge("classify_document", "retrieve_schema_context")
 
     # All extractors funnel into validation
+    builder.add_edge("extract_custom", "validate_extraction")
     builder.add_edge("extract_medical", "validate_extraction")
     builder.add_edge("extract_financial", "validate_extraction")
     builder.add_edge("extract_generic", "validate_extraction")
@@ -170,7 +177,17 @@ def build_graph(db_path: str | None = None) -> StateGraph:
     builder.add_edge("human_review_queue", "write_output")
     builder.add_edge("write_output", END)
 
-    # ── Conditional edges ──────────────────────────────────────────────────────
+    # ── Conditional edges ──────────────────────────────────────────────────
+    # 0. parse_document → custom extractor (shortcut) OR standard classify path
+    builder.add_conditional_edges(
+        "parse_document",
+        route_after_parse,
+        {
+            "extract_custom": "extract_custom",
+            "classify_document": "classify_document",
+        },
+    )
+
     # 1. retrieve_schema_context → correct extraction node (Router dispatch)
     builder.add_conditional_edges(
         "retrieve_schema_context",
@@ -188,6 +205,7 @@ def build_graph(db_path: str | None = None) -> StateGraph:
         route_after_validation,
         {
             "write_output": "write_output",
+            "extract_custom": "extract_custom",
             "extract_medical": "extract_medical",
             "extract_financial": "extract_financial",
             "extract_generic": "extract_generic",
