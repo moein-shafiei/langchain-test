@@ -29,6 +29,9 @@ sys.path.insert(0, str(_ROOT / "src"))
 import config  # noqa: E402 — must come after sys.path modification
 from main import resume_with_correction, run_extraction  # noqa: E402
 
+# ── Version ────────────────────────────────────────────────────────────────────
+APP_VERSION = "1.2.0"
+
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="PDF Extractor",
@@ -199,7 +202,10 @@ def render_result(extraction: dict) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 st.title("📄 PDF Document Extractor")
-st.caption("Multi-agent extraction pipeline · LangGraph + Azure OpenAI")
+st.caption(f"Multi-agent extraction pipeline · LangGraph + Azure OpenAI · v{APP_VERSION}")
+
+with st.sidebar:
+    st.markdown(f"**v{APP_VERSION}**")
 
 tab_extract, tab_review, tab_history = st.tabs(["Extract", "⚠️ Review (HITL)", "History"])
 
